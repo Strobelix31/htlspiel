@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dinosaurier-Sprungspiel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            overflow: hidden;
+            text-align: center;
+            background: linear-gradient(to bottom, #87ceeb, #ffffff);
+        }
+
+        h1 {
+            margin: 10px 0;
+            color: #333;
+        }
+
+        canvas {
+            display: block;
+            background: #d3ffd3;
+            margin: 0 auto;
+            border: 2px solid #333;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        #game-over {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2em;
+            color: red;
+        }
+
+        #start-message,
+        #gamertag-container,
+        #highscore-container {
+            display: block;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.5em;
+            color: #333;
+        }
+
+        #gamertag-container input,
+        #new-gamertag-container input {
+            font-size: 1.2em;
+            padding: 5px;
+            margin-top: 10px;
+        }
+
+        #score {
+            font-size: 20px;
+            color: black;
+        }
+
+        /* Highscore Container - nach links verschieben */
+        #highscore-container {
+            position: absolute;
+            top: 280px;
+            left: 20%; /* Hier wurde die Position nach links verschoben */
+            font-size: 1.2em;
+            display: block;
+            max-height: 300px;
+            overflow-y: auto;
+            width: 35%; /* Du kannst hier die Breite nach Belieben anpassen */
+            text-align: left;
+        }
+
+        #highscore-container ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        #highscore-container li {
+            padding: 5px 0;
+        }
+
+    </style>
+
+</head>
+<body>
+
+    <h1>Apache Dinosaurier-Sprungspiel</h1>
+
+    <!-- Gamertag Eingabe -->
+    <div id="gamertag-container">
+        <label for="gamertag">Gib deinen Gamertag ein:</label>
+        <input type="text" id="gamertag" placeholder="Dein Gamertag">
+        <button onclick="startGame()">Starten</button>
+    </div>
+
+    <!-- Spiel-Ende Nachricht -->
+    <div id="game-over">Game Over! Drücke R zum Neustarten.</div>
+
+    <!-- Highscore Anzeige -->
+    <div id="highscore-container">
+        <h2>Highscores:</h2>
+        <ul id="highscore-list">
+            <!-- Dynamisch erzeugte Highscore-Liste -->
+        </ul>
+        <button onclick="changeGamertag()">Namen ändern</button>
+        <button onclick="deleteGamertag()" style="display: none;">Gamertag löschen</button> <!-- Button zum Löschen -->
+    </div>
+
+    <!-- Score Anzeige -->
+    <div id="score"></div>
+
+    <!-- Neues Gamertag-Feld -->
+    <div id="new-gamertag-container" style="display: none;">
+        <label for="new-gamertag">Neuen Gamertag eingeben:</label>
+        <input type="text" id="new-gamertag" placeholder="Neuer Gamertag">
+        <button onclick="updateGamertag()">Speichern</button>
+    </div>
+
+    <!-- Canvas für das Spiel -->
+    <canvas id="gameCanvas" width="1000" height="400"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let dinosaur = { x: 50, y: 370, width: 30, height: 30, dy: 0, jumping: false };
+        let obstacles = [];
+        let gravity = 0.5;
+        let score = 0;
+        let gameOver = false;
+        let spawnCooldown = 0;
+        let gameStarted = false;
+        let playerName = '';
+        let highScores = JSON.parse(localStorage.getItem('highScores')) || [];
+
+        // Show Highscores on the page
+        function updateHighScores() {
+            const highscoreList = document.getElementById('highscore-list');
+            highscoreList.innerHTML = '';
+            highScores.sort((a, b) => b.score - a.score); // Sort by score descending
+            highScores.forEach(player => {
+                const li = document.createElement('li');
+                li.textContent = `${player.name}: ${player.score}`;
+                highscoreList.appendChild(li);
+            });
+        }
+
+        // Start Game
+        function startGame() {
+            playerName = document.getElementById('gamertag').value;
+            if (playerName.trim() === "") {
+                alert("Bitte gib einen Gamertag ein!");
+                return;
+            }
+            document.getElementById('gamertag-container').style.display = 'none';
+            document.querySelector('button[onclick="deleteGamertag()"]').style.display = 'inline-block'; // Zeigt den Lösch-Button an
+            gameStarted = true;
+            loop();
+        }
+
+        // Update Highscore
+        function updateHighscore() {
+            const existingPlayer = highScores.find(player => player.name === playerName);
+            if (existingPlayer) {
+                if (score > existingPlayer.score) {
+                    existingPlayer.score = score;
+                }
+            } else {
+                highScores.push({ name: playerName, score });
+            }
+            localStorage.setItem('highScores', JSON.stringify(highScores));
+            updateHighScores();
+        }
+
+        // Change Gamertag
+        function changeGamertag() {
+            document.getElementById('new-gamertag-container').style.display = 'block';
+        }
+
+        // Save new Gamertag
+        function updateGamertag() {
+            const newGamertag = document.getElementById('new-gamertag').value;
+            if (newGamertag.trim() === "") {
+                alert("Bitte gib einen neuen Gamertag ein!");
+                return;
+            }
+            playerName = newGamertag;
+            document.getElementById('new-gamertag-container').style.display = 'none';
+            alert(`Dein Gamertag wurde auf "${playerName}" geändert!`);
+        }
+
+        // Funktion zum Löschen des Gamertags
+        function deleteGamertag() {
+            // Überprüfen, ob der Spielername in den Highscores existiert
+            const playerIndex = highScores.findIndex(player => player.name === playerName);
+            if (playerIndex !== -1) {
+                // Entfernen des Spielers aus den Highscores
+                highScores.splice(playerIndex, 1);
+                localStorage.setItem('highScores', JSON.stringify(highScores)); // Speichern der neuen Highscore-Liste
+                alert(`Gamertag "${playerName}" wurde gelöscht.`);
+                updateHighScores(); // Highscore-Liste aktualisieren
+            } else {
+                alert("Dieser Gamertag existiert nicht in den Highscores.");
+            }
+        }
+
+        // Event listeners
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Enter' && !gameStarted) {
+                startGame();
+            }
+            if (e.code === 'Space' && !dinosaur.jumping && !gameOver && gameStarted) {
+                dinosaur.dy = -12;
+                dinosaur.jumping = true;
+            }
+            if (e.code === 'KeyR' && gameOver) {
+                resetGame();
+            }
+        });
+
+        function resetGame() {
+            dinosaur = { x: 50, y: 370, width: 30, height: 30, dy: 0, jumping: false };
+            obstacles = [];
+            score = 0;
+            gameOver = false;
+            document.getElementById('game-over').style.display = 'none';
+            loop();
+        }
+
+        function spawnObstacle() {
+            if (spawnCooldown > 0) return;
+            const height = Math.random() * 100 + 20;
+            obstacles.push({ 
+                x: canvas.width, 
+                y: canvas.height - height, 
+                width: 20, 
+                height: height 
+            });
+            spawnCooldown = 60; // Erhöht, damit weniger Hindernisse spawnen
+        }
+        
+
+        function update() {
+            if (gameOver || !gameStarted) return;
+
+            // Dinosaur logic
+            dinosaur.y += dinosaur.dy;
+            dinosaur.dy += gravity;
+            if (dinosaur.y >= 370) {
+                dinosaur.y = 370;
+                dinosaur.jumping = false;
+            }
+
+            // Obstacle logic
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].x -= 6;
+                if (
+                    dinosaur.x < obstacles[i].x + obstacles[i].width &&
+                    dinosaur.x + dinosaur.width > obstacles[i].x &&
+                    dinosaur.y < obstacles[i].y + obstacles[i].height &&
+                    dinosaur.y + dinosaur.height > obstacles[i].y
+                ) {
+                    gameOver = true;
+                    document.getElementById('game-over').style.display = 'block';
+                    updateHighscore();
+                }
+                if (obstacles[i].x + obstacles[i].width < 0) {
+                    obstacles.splice(i, 1);
+                    score++;
+                }
+            }
+
+            // Spawn new obstacles
+            if (Math.random() < 0.02) {
+                spawnObstacle();
+            }
+
+            // Decrease cooldown
+            if (spawnCooldown > 0) spawnCooldown--;
+        }
+
+        function draw() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw dinosaur
+            ctx.fillStyle = 'green';
+            ctx.fillRect(dinosaur.x, dinosaur.y, dinosaur.width, dinosaur.height);
+
+            // Draw obstacles
+            ctx.fillStyle = '#8b4513';
+            ctx.strokeStyle = '#654321';
+            ctx.lineWidth = 2;
+            for (let obstacle of obstacles) {
+                ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+                ctx.strokeRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+            }
+
+            // Draw score
+            ctx.fillStyle = 'black';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Punkte: ${score}`, 10, 30);
+            ctx.fillText(`Highscore: ${highScores.find(player => player.name === playerName)?.score || 0}`, 10, 60);
+        }
+
+        function loop() {
+            update();
+            draw();
+            if (!gameOver) {
+                requestAnimationFrame(loop);
+            }
+        }
+
+        // Initialize highscore list
+        updateHighScores();
+
+    </script>
+
+</body>
+</html>
